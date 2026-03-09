@@ -77,7 +77,7 @@ export function Toast({ toast }) {
   );
 }
 
-export function ActionBar({ onExport, onSave, onNew }) {
+export function ActionBar({ onExport, onSave, onNew, onImport }) {
   return (
     <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
       <button onClick={onExport} style={{ ...btnBase, background: C.accent, color: C.navy, fontSize: 13, padding: "9px 20px" }}>
@@ -89,6 +89,11 @@ export function ActionBar({ onExport, onSave, onNew }) {
       <button onClick={onNew} style={{ ...btnBase, background: C.white, color: C.navy, border: `1.5px solid ${C.midGray}`, fontSize: 13, padding: "9px 20px" }}>
         ＋ Novo Plano
       </button>
+      {onImport && (
+        <button onClick={onImport} style={{ ...btnBase, background: C.lightBg, color: C.blue, border: `1.5px solid ${C.blue}44`, fontSize: 13, padding: "9px 20px" }}>
+          📋 Importar do Claude
+        </button>
+      )}
     </div>
   );
 }

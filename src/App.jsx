@@ -1,21 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { C, btnBase } from "./theme.js";
 import { Toast } from "./components/UI.jsx";
-import EditorTab  from "./components/EditorTab.jsx";
-import HistoryTab from "./components/HistoryTab.jsx";
-import LibraryTab from "./components/LibraryTab.jsx";
+import EditorTab   from "./components/EditorTab.jsx";
+import HistoryTab  from "./components/HistoryTab.jsx";
+import LibraryTab  from "./components/LibraryTab.jsx";
+import ImportModal from "./components/ImportModal.jsx";
 import { DEFAULT_PLAN } from "./data/defaultPlan.js";
 import { generatePDF }  from "./utils/generatePDF.js";
 
 const STORAGE_KEY = "handball_history_v1";
 
 export default function App() {
-  const [tab,     setTab]     = useState("editor");
-  const [plan,    setPlan]    = useState(() => JSON.parse(JSON.stringify(DEFAULT_PLAN)));
-  const [history, setHistory] = useState([]);
-  const [toast,   setToast]   = useState(null);
+  const [tab,        setTab]        = useState("editor");
+  const [plan,       setPlan]       = useState(() => JSON.parse(JSON.stringify(DEFAULT_PLAN)));
+  const [history,    setHistory]    = useState([]);
+  const [toast,      setToast]      = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
-  // ── Load history from localStorage ────────────────────────────────────────
+  // Load history from localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -23,13 +25,11 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  // ── Toast helper ───────────────────────────────────────────────────────────
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2800);
   };
 
-  // ── Actions ────────────────────────────────────────────────────────────────
   const handleSave = () => {
     const entry      = { ...plan, savedAt: new Date().toLocaleString("pt-BR") };
     const newHistory = [entry, ...history].slice(0, 50);
@@ -46,6 +46,13 @@ export default function App() {
     setPlan(JSON.parse(JSON.stringify(p)));
     setTab("editor");
     showToast("Treino carregado no editor! ✏️");
+  };
+
+  const handleImport = (p) => {
+    setPlan(JSON.parse(JSON.stringify(p)));
+    setShowImport(false);
+    setTab("editor");
+    showToast("Treino importado e carregado! 🎉");
   };
 
   const handleDelete = (i) => {
@@ -69,7 +76,6 @@ export default function App() {
     showToast("Novo plano criado!");
   };
 
-  // ── Tab style ──────────────────────────────────────────────────────────────
   const tabStyle = (t) => ({
     padding: "10px 22px",
     cursor: "pointer",
@@ -85,7 +91,7 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'Barlow', sans-serif", background: "#eef1f6", minHeight: "100vh" }}>
 
-      {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
+      {/* Top Bar */}
       <div style={{ background: C.navy, padding: "0 24px", display: "flex", alignItems: "center", gap: 0, boxShadow: "0 2px 12px rgba(0,0,0,0.25)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", marginRight: "auto" }}>
           <span style={{ fontSize: 24 }}>🤾</span>
@@ -98,10 +104,19 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Botão de importar no topo */}
+        <button
+          onClick={() => setShowImport(true)}
+          style={{ ...btnBase, background: C.accent, color: C.navy, fontSize: 12, padding: "7px 16px", marginRight: 16, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5 }}
+        >
+          📋 IMPORTAR DO CLAUDE
+        </button>
+
         <nav style={{ display: "flex" }}>
           {[
-            { key: "editor",  label: "✏️ Editor"    },
-            { key: "history", label: "📂 Histórico" },
+            { key: "editor",  label: "✏️ Editor"     },
+            { key: "history", label: "📂 Histórico"  },
             { key: "library", label: "📚 Biblioteca" },
           ].map(({ key, label }) => (
             <button key={key} style={tabStyle(key)} onClick={() => setTab(key)}>
@@ -111,15 +126,24 @@ export default function App() {
         </nav>
       </div>
 
-      {/* ── Toast ───────────────────────────────────────────────────────────── */}
+      {/* Toast */}
       <Toast toast={toast} />
 
-      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      {/* Import Modal */}
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onLoad={handleImport}
+        />
+      )}
+
+      {/* Content */}
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "22px 16px" }}>
         {tab === "editor" && (
           <EditorTab
             plan={plan} setPlan={setPlan}
             onExport={handleExport} onSave={handleSave} onNew={handleNew}
+            onImport={() => setShowImport(true)}
           />
         )}
         {tab === "history" && (

@@ -8,7 +8,7 @@ import { C, btnBase, btnSm, inputBase } from "../theme.js";
 import { SectionTitle, Input, ActionBar } from "./UI.jsx";
 import BlockCard from "./BlockCard.jsx";
 
-export default function EditorTab({ plan, setPlan, onExport, onSave, onNew }) {
+export default function EditorTab({ plan, setPlan, onExport, onSave, onNew, onImport }) {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const updateMeta    = (field, val) => setPlan(p => ({ ...p, [field]: val }));
@@ -33,7 +33,7 @@ export default function EditorTab({ plan, setPlan, onExport, onSave, onNew }) {
 
   return (
     <div>
-      <ActionBar onExport={onExport} onSave={onSave} onNew={onNew} />
+      <ActionBar onExport={onExport} onSave={onSave} onNew={onNew} onImport={onImport} />
 
       {/* ── Meta ─────────────────────────────────────────────────────────── */}
       <div style={card()}>
