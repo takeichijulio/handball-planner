@@ -1,9 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  GERADOR DE PDF
 //  Toda a lógica de geração do PDF está aqui.
-//  Para ajustar layout, cores ou fontes do PDF, edite apenas este arquivo.
-//
-//  Depende de jsPDF + jsPDF-AutoTable carregados via CDN no index.html
+//  Emojis são removidos do PDF (Helvetica não suporta) — substituídos por
+//  elementos visuais e texto puro. Emojis ficam apenas na interface do app.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NAVY_RGB   = [13,  27,  42];
@@ -14,10 +13,30 @@ const MGRAY_RGB  = [208, 216, 228];
 const TEXT_RGB   = [26,  26,  46];
 const WHITE_RGB  = [255, 255, 255];
 const TIP_RGB    = [255, 248, 237];
+const FOCUS_RGB  = [184, 96,  10];
 
 const W      = 210;
 const MARGIN = 18;
 const CW     = W - 2 * MARGIN;
+
+// Remove todos os emojis e caracteres não-latin do texto
+function clean(str = "") {
+  return str
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")   // emojis suplementares
+    .replace(/[\u{2600}-\u{27BF}]/gu, "")      // símbolos miscelâneos
+    .replace(/[\u{2B00}-\u{2BFF}]/gu, "")      // setas e símbolos
+    .replace(/[^\x00-\xFF]/g, "")              // qualquer outro não-latin
+    .replace(/\s{2,}/g, " ")                   // espaços duplos
+    .trim();
+}
+
+// Labels com esses prefixos (após limpar emojis) são destacados em laranja
+const HIGHLIGHT_LABELS = ["Foco:", "foco:"];
+
+function isHighlight(label) {
+  const c = clean(label).trim();
+  return HIGHLIGHT_LABELS.some(h => c.endsWith(h));
+}
 
 export function generatePDF(plan) {
   if (!window.jspdf) {
@@ -36,7 +55,7 @@ export function generatePDF(plan) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(...WHITE_RGB);
-  doc.text("🤾 PLANO DE TREINO", W / 2, y + 9.5, { align: "center" });
+  doc.text("PLANO DE TREINO", W / 2, y + 9.5, { align: "center" });
   y += 14;
 
   doc.setFillColor(...NAVY_RGB);
@@ -44,7 +63,7 @@ export function generatePDF(plan) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...ACCENT_RGB);
-  doc.text(`${plan.equipe}  ·  ${plan.tema}`, W / 2, y + 5.5, { align: "center" });
+  doc.text(`${clean(plan.equipe)}  |  ${clean(plan.tema)}`, W / 2, y + 5.5, { align: "center" });
   y += 8;
 
   const mw = CW / 3;
@@ -53,9 +72,9 @@ export function generatePDF(plan) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...WHITE_RGB);
-  doc.text(`⏱ ${plan.duracao}`, MARGIN + mw * 0.5, y + 6.5, { align: "center" });
-  doc.text(`📍 ${plan.espaco}`,  MARGIN + mw * 1.5, y + 6.5, { align: "center" });
-  doc.text(`📅 ${plan.data}`,    MARGIN + mw * 2.5, y + 6.5, { align: "center" });
+  doc.text(`Duracao: ${clean(plan.duracao)}`, MARGIN + mw * 0.5, y + 6.5, { align: "center" });
+  doc.text(`Local: ${clean(plan.espaco)}`,    MARGIN + mw * 1.5, y + 6.5, { align: "center" });
+  doc.text(`Data: ${clean(plan.data)}`,       MARGIN + mw * 2.5, y + 6.5, { align: "center" });
   y += 13;
 
   // ── Objetivos ──────────────────────────────────────────────────────────────
@@ -65,7 +84,7 @@ export function generatePDF(plan) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...BLUE_RGB);
-  doc.text("🎯  OBJETIVOS DO TREINO", MARGIN + 8, y + 5);
+  doc.text("OBJETIVOS DO TREINO", MARGIN + 8, y + 5);
   y += 7;
 
   const objH = plan.objetivos.length * 6.5 + 4;
@@ -76,16 +95,27 @@ export function generatePDF(plan) {
   doc.setFontSize(8.5);
   doc.setTextColor(...TEXT_RGB);
   plan.objetivos.forEach((obj, i) => {
-    doc.text(`◆  ${obj}`, MARGIN + 8, y + 5 + i * 6.5);
+    doc.text(`+  ${clean(obj)}`, MARGIN + 8, y + 5 + i * 6.5);
   });
   y += objH + 5;
 
   // ── Blocos de exercício ────────────────────────────────────────────────────
-  const HIGHLIGHT_PREFIXES = ["🎯", "⚡", "💡"];
-
   plan.blocos.forEach((bloco) => {
-    const LINE_H = 6.8;
-    const bodyH  = bloco.linhas.length * LINE_H + 6;
+    const LINE_H = 7;
+
+    // Calcular altura real de cada linha (pode quebrar em múltiplas linhas)
+    const cleanedLinhas = bloco.linhas.map(([label, texto]) => ({
+      label: clean(label),
+      texto: clean(texto),
+      hl:    isHighlight(label),
+    }));
+
+    // Pré-calcular quantas linhas de texto cada item vai ocupar
+    const linhaHeights = cleanedLinhas.map(({ texto }) => {
+      const wrapped = doc.splitTextToSize(texto, CW - 50);
+      return Math.max(1, wrapped.length) * LINE_H;
+    });
+    const bodyH  = linhaHeights.reduce((a, b) => a + b, 0) + 8;
     const totalH = 12 + bodyH;
 
     if (y + totalH > 282) { doc.addPage(); y = 14; }
@@ -101,17 +131,20 @@ export function generatePDF(plan) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...WHITE_RGB);
-    doc.text(bloco.numero, MARGIN + 8.5, y + 7.5, { align: "center" });
+    doc.text(clean(bloco.numero), MARGIN + 8.5, y + 7.5, { align: "center" });
 
+    // Título (sem emoji)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(...NAVY_RGB);
-    doc.text(`${bloco.emoji}  ${bloco.titulo}`, MARGIN + 16, y + 7.5);
+    const titleText = doc.splitTextToSize(clean(bloco.titulo), CW - 50);
+    doc.text(titleText, MARGIN + 17, y + 7.5);
 
+    // Duração
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...ACCENT_RGB);
-    doc.text(`⏱ ${bloco.duracao}`, MARGIN + CW - 4, y + 7.5, { align: "right" });
+    doc.text(clean(bloco.duracao), MARGIN + CW - 4, y + 7.5, { align: "right" });
 
     doc.setDrawColor(...BLUE_RGB);
     doc.setLineWidth(0.5);
@@ -123,21 +156,29 @@ export function generatePDF(plan) {
     doc.setDrawColor(...MGRAY_RGB);
     doc.rect(MARGIN, y, CW, bodyH, "FD");
 
-    bloco.linhas.forEach(([label, texto], i) => {
-      const ly         = y + 5 + i * LINE_H;
-      const isHighlight = HIGHLIGHT_PREFIXES.some(p => label.startsWith(p));
-
+    let lineY = y + 6;
+    cleanedLinhas.forEach(({ label, texto, hl }, i) => {
+      // Label
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.5);
       doc.setTextColor(...BLUE_RGB);
-      doc.text(label, MARGIN + 8, ly);
+      doc.text(label, MARGIN + 8, lineY);
 
-      doc.setFont("helvetica", isHighlight ? "bold" : "normal");
+      // Texto com wrap
+      doc.setFont("helvetica", hl ? "bold" : "normal");
       doc.setFontSize(8);
-      doc.setTextColor(...(isHighlight ? [184, 96, 10] : TEXT_RGB));
+      doc.setTextColor(...(hl ? FOCUS_RGB : TEXT_RGB));
+      const wrapped = doc.splitTextToSize(texto, CW - 50);
+      doc.text(wrapped, MARGIN + 38, lineY);
 
-      const lines = doc.splitTextToSize(texto, CW - 46);
-      doc.text(lines, MARGIN + 37, ly);
+      lineY += Math.max(1, wrapped.length) * LINE_H;
+
+      // Separador leve entre linhas (exceto última)
+      if (i < cleanedLinhas.length - 1) {
+        doc.setDrawColor(...MGRAY_RGB);
+        doc.setLineWidth(0.2);
+        doc.line(MARGIN + 6, lineY - 1.5, MARGIN + CW - 6, lineY - 1.5);
+      }
     });
 
     y += bodyH + 4;
@@ -149,21 +190,27 @@ export function generatePDF(plan) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...NAVY_RGB);
-  doc.text("📋  RESUMO DO TREINO", MARGIN, y + 5);
+  doc.text("RESUMO DO TREINO", MARGIN, y + 5);
   y += 9;
+
+  // Limpar emojis das linhas do resumo
+  const cleanedResumo = plan.resumo.map(([bloco, desc, dur]) => [
+    clean(bloco), clean(desc), clean(dur)
+  ]);
 
   doc.autoTable({
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
-    head: [["BLOCO", "CONTEÚDO", "DURAÇÃO"]],
+    head: [["BLOCO", "CONTEUDO", "DURACAO"]],
     body: [
-      ...plan.resumo,
-      ["TOTAL", "", plan.totalDuracao],
+      ...cleanedResumo,
+      ["TOTAL", "", clean(plan.totalDuracao)],
     ],
     styles: {
       fontSize: 8,
       cellPadding: 3,
       textColor: TEXT_RGB,
+      font: "helvetica",
     },
     headStyles: {
       fillColor: NAVY_RGB,
@@ -172,7 +219,7 @@ export function generatePDF(plan) {
       halign: "center",
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 16 },
+      0: { halign: "center", cellWidth: 18 },
       2: { halign: "center", cellWidth: 26 },
     },
     alternateRowStyles: { fillColor: LGRAY_RGB },
@@ -189,26 +236,30 @@ export function generatePDF(plan) {
   y = doc.lastAutoTable.finalY + 6;
 
   // ── Dica Tática ────────────────────────────────────────────────────────────
-  if (y + 30 > 282) { doc.addPage(); y = 14; }
+  const tipText  = clean(plan.dicaTatica);
+  const tipLines = doc.splitTextToSize(tipText, CW - 18);
+  const tipH     = Math.max(26, tipLines.length * 5.5 + 16);
+
+  if (y + tipH > 282) { doc.addPage(); y = 14; }
 
   doc.setFillColor(...TIP_RGB);
   doc.setDrawColor(...ACCENT_RGB);
   doc.setLineWidth(0.7);
-  doc.roundedRect(MARGIN, y, CW, 28, 2, 2, "FD");
+  doc.roundedRect(MARGIN, y, CW, tipH, 2, 2, "FD");
   doc.setLineWidth(2.5);
-  doc.line(MARGIN + 0.3, y, MARGIN + 0.3, y + 28);
+  doc.setDrawColor(...ACCENT_RGB);
+  doc.line(MARGIN + 0.3, y, MARGIN + 0.3, y + tipH);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...ACCENT_RGB);
-  doc.text("💡  DICA TÁTICA DO DIA", MARGIN + 8, y + 7);
+  doc.text("DICA TATICA DO DIA", MARGIN + 8, y + 7);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...TEXT_RGB);
-  const tipLines = doc.splitTextToSize(plan.dicaTatica, CW - 16);
   doc.text(tipLines, MARGIN + 8, y + 14);
-  y += 32;
+  y += tipH + 4;
 
   // ── Rodapé ─────────────────────────────────────────────────────────────────
   doc.setDrawColor(...MGRAY_RGB);
@@ -218,7 +269,7 @@ export function generatePDF(plan) {
   doc.setFontSize(7);
   doc.setTextColor(160, 160, 160);
   doc.text(
-    "Júlio Takeichi  ·  Planejamento de Treinos — Handebol Universitário · Rio de Janeiro",
+    "Julio Takeichi  |  Planejamento de Treinos - Handebol Universitario - Rio de Janeiro",
     W / 2, y + 5, { align: "center" }
   );
 
