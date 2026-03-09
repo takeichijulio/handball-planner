@@ -5,23 +5,29 @@ import EditorTab   from "./components/EditorTab.jsx";
 import HistoryTab  from "./components/HistoryTab.jsx";
 import LibraryTab  from "./components/LibraryTab.jsx";
 import ImportModal from "./components/ImportModal.jsx";
-import { DEFAULT_PLAN } from "./data/defaultPlan.js";
-import { generatePDF }  from "./utils/generatePDF.js";
+import { DEFAULT_PLAN }  from "./data/defaultPlan.js";
+import { generatePDF }   from "./utils/generatePDF.js";
 
 const STORAGE_KEY = "handball_history_v1";
+const LIB_KEY     = "handball_user_library_v1";
 
 export default function App() {
-  const [tab,        setTab]        = useState("editor");
-  const [plan,       setPlan]       = useState(() => JSON.parse(JSON.stringify(DEFAULT_PLAN)));
-  const [history,    setHistory]    = useState([]);
-  const [toast,      setToast]      = useState(null);
-  const [showImport, setShowImport] = useState(false);
+  const [tab,         setTab]         = useState("editor");
+  const [plan,        setPlan]        = useState(() => JSON.parse(JSON.stringify(DEFAULT_PLAN)));
+  const [history,     setHistory]     = useState([]);
+  const [userLib,     setUserLib]     = useState({});
+  const [toast,       setToast]       = useState(null);
+  const [showImport,  setShowImport]  = useState(false);
 
-  // Load history from localStorage
+  // Carrega historico e biblioteca do usuario
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setHistory(JSON.parse(raw));
+      const h = localStorage.getItem(STORAGE_KEY);
+      if (h) setHistory(JSON.parse(h));
+    } catch (_) {}
+    try {
+      const l = localStorage.getItem(LIB_KEY);
+      if (l) setUserLib(JSON.parse(l));
     } catch (_) {}
   }, []);
 
@@ -30,6 +36,7 @@ export default function App() {
     setTimeout(() => setToast(null), 2800);
   };
 
+  // Salva treino no historico
   const handleSave = () => {
     const entry      = { ...plan, savedAt: new Date().toLocaleString("pt-BR") };
     const newHistory = [entry, ...history].slice(0, 50);
@@ -38,23 +45,26 @@ export default function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newHistory));
       showToast("Treino salvo com sucesso! 💾");
     } catch (_) {
-      showToast("Erro ao salvar no histórico.", "error");
+      showToast("Erro ao salvar no historico.", "error");
     }
   };
 
+  // Carrega treino do historico no editor
   const handleLoad = (p) => {
     setPlan(JSON.parse(JSON.stringify(p)));
     setTab("editor");
-    showToast("Treino carregado no editor! ✏️");
+    showToast("Treino carregado no editor!");
   };
 
+  // Importa treino via codigo JS colado
   const handleImport = (p) => {
     setPlan(JSON.parse(JSON.stringify(p)));
     setShowImport(false);
     setTab("editor");
-    showToast("Treino importado e carregado! 🎉");
+    showToast("Treino importado e carregado!");
   };
 
+  // Remove treino do historico
   const handleDelete = (i) => {
     const newH = history.filter((_, idx) => idx !== i);
     setHistory(newH);
@@ -62,22 +72,54 @@ export default function App() {
     showToast("Treino removido.");
   };
 
+  // Gera PDF
   const handleExport = () => {
     try {
       generatePDF(plan);
-      showToast("PDF gerado e baixado! ⬇️");
+      showToast("PDF gerado e baixado!");
     } catch (e) {
       showToast("Erro ao gerar PDF. Tente novamente.", "error");
     }
   };
 
+  // Novo plano em branco
   const handleNew = () => {
     setPlan(JSON.parse(JSON.stringify(DEFAULT_PLAN)));
     showToast("Novo plano criado!");
   };
 
+  // Adiciona exercicio do bloco na biblioteca do usuario (categoria correta)
+  const handleAddToLibrary = (bloco, category) => {
+    const entry = {
+      titulo:  bloco.titulo,
+      duracao: bloco.duracao,
+      linhas:  bloco.linhas.map(l => [...l]),
+    };
+    const updated = { ...userLib };
+    if (!updated[category]) updated[category] = [];
+    // Evita duplicatas pelo titulo
+    const exists = updated[category].some(e => e.titulo === entry.titulo);
+    if (!exists) {
+      updated[category] = [entry, ...updated[category]];
+      setUserLib(updated);
+      try { localStorage.setItem(LIB_KEY, JSON.stringify(updated)); } catch (_) {}
+      showToast(`"${bloco.titulo}" adicionado a ${category}!`);
+    } else {
+      showToast(`Esse exercicio ja esta na biblioteca.`, "error");
+    }
+  };
+
+  // Remove exercicio da biblioteca do usuario
+  const handleDeleteFromLib = (category, idx) => {
+    const updated = { ...userLib };
+    updated[category] = updated[category].filter((_, i) => i !== idx);
+    setUserLib(updated);
+    try { localStorage.setItem(LIB_KEY, JSON.stringify(updated)); } catch (_) {}
+    showToast("Exercicio removido da biblioteca.");
+  };
+
   const tabStyle = (t) => ({
-    padding: "10px 22px",
+    padding: "10px 20px",
     cursor: "pointer",
     fontFamily: "'Barlow Condensed', sans-serif",
     fontWeight: 700, fontSize: 14, letterSpacing: .8,
@@ -92,7 +134,7 @@ export default function App() {
     <div style={{ fontFamily: "'Barlow', sans-serif", background: "#eef1f6", minHeight: "100vh" }}>
 
       {/* Top Bar */}
-      <div style={{ background: C.navy, padding: "0 24px", display: "flex", alignItems: "center", gap: 0, boxShadow: "0 2px 12px rgba(0,0,0,0.25)" }}>
+      <div style={{ background: C.navy, padding: "0 20px", display: "flex", alignItems: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.25)", flexWrap: "wrap", gap: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", marginRight: "auto" }}>
           <span style={{ fontSize: 24 }}>🤾</span>
           <div>
@@ -100,28 +142,26 @@ export default function App() {
               HANDBALL PLANNER
             </div>
             <div style={{ fontSize: 10, color: C.accent, letterSpacing: .5 }}>
-              Júlio Takeichi · Handebol Universitário · Rio de Janeiro
+              Julio Takeichi · Handebol Universitario · Rio de Janeiro
             </div>
           </div>
         </div>
 
-        {/* Botão de importar no topo */}
+        {/* Botao importar */}
         <button
           onClick={() => setShowImport(true)}
           style={{ ...btnBase, background: C.accent, color: C.navy, fontSize: 12, padding: "7px 16px", marginRight: 16, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5 }}
         >
-          📋 IMPORTAR DO CLAUDE
+          IMPORTAR DO CLAUDE
         </button>
 
         <nav style={{ display: "flex" }}>
           {[
-            { key: "editor",  label: "✏️ Editor"     },
-            { key: "history", label: "📂 Histórico"  },
-            { key: "library", label: "📚 Biblioteca" },
+            { key: "editor",  label: "Editor"     },
+            { key: "history", label: "Historico"  },
+            { key: "library", label: "Biblioteca" },
           ].map(({ key, label }) => (
-            <button key={key} style={tabStyle(key)} onClick={() => setTab(key)}>
-              {label}
-            </button>
+            <button key={key} style={tabStyle(key)} onClick={() => setTab(key)}>{label}</button>
           ))}
         </nav>
       </div>
@@ -131,19 +171,19 @@ export default function App() {
 
       {/* Import Modal */}
       {showImport && (
-        <ImportModal
-          onClose={() => setShowImport(false)}
-          onLoad={handleImport}
-        />
+        <ImportModal onClose={() => setShowImport(false)} onLoad={handleImport} />
       )}
 
-      {/* Content */}
+      {/* Conteudo */}
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "22px 16px" }}>
         {tab === "editor" && (
           <EditorTab
             plan={plan} setPlan={setPlan}
-            onExport={handleExport} onSave={handleSave} onNew={handleNew}
+            onExport={handleExport}
+            onSave={handleSave}
+            onNew={handleNew}
             onImport={() => setShowImport(true)}
+            onAddToLibrary={handleAddToLibrary}
           />
         )}
         {tab === "history" && (
@@ -151,10 +191,15 @@ export default function App() {
             history={history}
             onLoad={handleLoad}
             onDelete={handleDelete}
-            onGeneratePDF={(p) => { generatePDF(p); showToast("PDF gerado! ⬇️"); }}
+            onGeneratePDF={(p) => { generatePDF(p); showToast("PDF gerado!"); }}
           />
         )}
-        {tab === "library" && <LibraryTab />}
+        {tab === "library" && (
+          <LibraryTab
+            userLib={userLib}
+            onDeleteFromLib={handleDeleteFromLib}
+          />
+        )}
       </div>
     </div>
   );

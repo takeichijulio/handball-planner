@@ -8,7 +8,7 @@ import { C, btnBase, btnSm, inputBase } from "../theme.js";
 import { SectionTitle, Input, ActionBar } from "./UI.jsx";
 import BlockCard from "./BlockCard.jsx";
 
-export default function EditorTab({ plan, setPlan, onExport, onSave, onNew, onImport }) {
+export default function EditorTab({ plan, setPlan, onExport, onSave, onNew, onImport, onAddToLibrary }) {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const updateMeta    = (field, val) => setPlan(p => ({ ...p, [field]: val }));
@@ -74,7 +74,7 @@ export default function EditorTab({ plan, setPlan, onExport, onSave, onNew, onIm
           <BlockCard
             key={i} bloco={b} idx={i}
             onChange={updateBloco} onRemove={removeBloco}
-            onMoveUp={moveBlocoUp} onMoveDown={moveBlocoDown}
+            onMoveUp={moveBlocoUp} onMoveDown={moveBlocoDown} onAddToLibrary={onAddToLibrary}
             isFirst={i === 0} isLast={i === plan.blocos.length - 1}
           />
         ))}

@@ -1,279 +1,321 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  GERADOR DE PDF
-//  Toda a lógica de geração do PDF está aqui.
-//  Emojis são removidos do PDF (Helvetica não suporta) — substituídos por
-//  elementos visuais e texto puro. Emojis ficam apenas na interface do app.
+//  GERADOR DE PDF — modelo visual aprovado (treino_handebol_masculino_humanas)
+//  - Sem emojis (Helvetica nao suporta — removidos via clean())
+//  - Alturas calculadas dinamicamente por splitTextToSize (sem quebras)
+//  - Layout identico ao PDF de referencia gerado em Python/ReportLab
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NAVY_RGB   = [13,  27,  42];
-const BLUE_RGB   = [27,  79,  138];
-const ACCENT_RGB = [232, 160, 32];
-const LGRAY_RGB  = [244, 247, 251];
-const MGRAY_RGB  = [208, 216, 228];
-const TEXT_RGB   = [26,  26,  46];
-const WHITE_RGB  = [255, 255, 255];
-const TIP_RGB    = [255, 248, 237];
-const FOCUS_RGB  = [184, 96,  10];
+const NAVY    = [13,  27,  42];
+const BLUE    = [27,  79,  138];
+const ACCENT  = [232, 160, 32];
+const LGRAY   = [244, 247, 251];
+const MGRAY   = [208, 216, 228];
+const DARK    = [26,  26,  46];
+const WHITE   = [255, 255, 255];
+const TIP_BG  = [255, 248, 237];
+const FOCUS   = [184, 96,  10];
+const GRAY_FT = [153, 153, 153];
 
-const W      = 210;
-const MARGIN = 18;
-const CW     = W - 2 * MARGIN;
+const W      = 210;          // largura A4 em mm
+const MARGIN = 18;           // margem lateral
+const CW     = W - 2*MARGIN; // largura util
 
-// Remove todos os emojis e caracteres não-latin do texto
+// ── Limpa emojis e chars fora do latin-1 ────────────────────────────────────
 function clean(str = "") {
-  return str
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")   // emojis suplementares
-    .replace(/[\u{2600}-\u{27BF}]/gu, "")      // símbolos miscelâneos
-    .replace(/[\u{2B00}-\u{2BFF}]/gu, "")      // setas e símbolos
-    .replace(/[^\x00-\xFF]/g, "")              // qualquer outro não-latin
-    .replace(/\s{2,}/g, " ")                   // espaços duplos
+  return String(str)
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+    .replace(/[\u{2600}-\u{27BF}]/gu,   "")
+    .replace(/[\u{2B00}-\u{2BFF}]/gu,   "")
+    .replace(/[\u{FE00}-\u{FEFF}]/gu,   "")
+    .replace(/[^\x00-\xFF]/g,           "")
+    .replace(/\s{2,}/g, " ")
     .trim();
 }
 
-// Labels com esses prefixos (após limpar emojis) são destacados em laranja
-const HIGHLIGHT_LABELS = ["Foco:", "foco:"];
-
-function isHighlight(label) {
-  const c = clean(label).trim();
-  return HIGHLIGHT_LABELS.some(h => c.endsWith(h));
+// ── Label recebe destaque laranja? ───────────────────────────────────────────
+function isFocus(label) {
+  const c = clean(label).toLowerCase();
+  return c.includes("foco:") || c.includes("atencao:");
 }
 
+// ── Desenha retangulo com cantos arredondados preenchido ─────────────────────
+function roundRect(doc, x, y, w, h, r, fillColor, strokeColor) {
+  doc.setFillColor(...fillColor);
+  if (strokeColor) {
+    doc.setDrawColor(...strokeColor);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, w, h, r, r, "FD");
+  } else {
+    doc.roundedRect(x, y, w, h, r, r, "F");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export function generatePDF(plan) {
   if (!window.jspdf) {
-    alert("Aguarde — o gerador de PDF ainda está carregando. Tente novamente em instantes.");
+    alert("Aguarde — o gerador de PDF ainda esta carregando. Tente novamente.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
+  // Constantes de layout (espelham o Python)
+  const LABEL_W  = 36;           // col de label dentro do bloco
+  const BODY_W   = CW - LABEL_W - 16; // col de texto
+  const LH       = 5.2;          // altura por linha de texto
+  const PAD_V    = 4;            // padding vertical interno
+  const BLOCK_GAP = 3;           // espaco entre blocos
+
   let y = 14;
 
-  // ── Cabeçalho ──────────────────────────────────────────────────────────────
-  doc.setFillColor(...NAVY_RGB);
-  doc.roundedRect(MARGIN, y, CW, 14, 3, 3, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...WHITE_RGB);
-  doc.text("PLANO DE TREINO", W / 2, y + 9.5, { align: "center" });
-  y += 14;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 1. CABECALHO
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  doc.setFillColor(...NAVY_RGB);
+  // Faixa navy — "PLANO DE TREINO"
+  roundRect(doc, MARGIN, y, CW, 13, 3, NAVY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...WHITE);
+  doc.text("PLANO DE TREINO", W/2, y+8.8, { align:"center" });
+  y += 13;
+
+  // Faixa navy — equipe + tema
+  doc.setFillColor(...NAVY);
   doc.rect(MARGIN, y, CW, 8, "F");
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(...ACCENT_RGB);
-  doc.text(`${clean(plan.equipe)}  |  ${clean(plan.tema)}`, W / 2, y + 5.5, { align: "center" });
+  doc.setTextColor(...ACCENT);
+  doc.text(
+    `${clean(plan.equipe)}  \xb7  ${clean(plan.tema)}`,
+    W/2, y+5.5, { align:"center" }
+  );
   y += 8;
 
-  const mw = CW / 3;
-  doc.setFillColor(...BLUE_RGB);
-  doc.roundedRect(MARGIN, y, CW, 10, 2, 2, "F");
+  // Faixa azul — duracao / local / data
+  roundRect(doc, MARGIN, y, CW, 9, 2, BLUE);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(...WHITE_RGB);
-  doc.text(`Duracao: ${clean(plan.duracao)}`, MARGIN + mw * 0.5, y + 6.5, { align: "center" });
-  doc.text(`Local: ${clean(plan.espaco)}`,    MARGIN + mw * 1.5, y + 6.5, { align: "center" });
-  doc.text(`Data: ${clean(plan.data)}`,       MARGIN + mw * 2.5, y + 6.5, { align: "center" });
-  y += 13;
+  doc.setTextColor(...WHITE);
+  const mw = CW/3;
+  doc.text(`Duracao: ${clean(plan.duracao)}`, MARGIN+mw*0.5, y+6, { align:"center" });
+  doc.text(`Local: ${clean(plan.espaco)}`,    MARGIN+mw*1.5, y+6, { align:"center" });
+  doc.text(`Data: ${clean(plan.data)}`,       MARGIN+mw*2.5, y+6, { align:"center" });
+  y += 12;
 
-  // ── Objetivos ──────────────────────────────────────────────────────────────
-  doc.setFillColor(...LGRAY_RGB);
-  doc.setDrawColor(...MGRAY_RGB);
-  doc.roundedRect(MARGIN, y, CW, 7, 2, 2, "FD");
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 2. OBJETIVOS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Header objetivos
+  roundRect(doc, MARGIN, y, CW, 7, 2, LGRAY, MGRAY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...BLUE_RGB);
-  doc.text("OBJETIVOS DO TREINO", MARGIN + 8, y + 5);
+  doc.setTextColor(...BLUE);
+  doc.text("OBJETIVOS DO TREINO", MARGIN+8, y+5);
   y += 7;
 
-  const objH = plan.objetivos.length * 6.5 + 4;
-  doc.setFillColor(...WHITE_RGB);
-  doc.setDrawColor(...MGRAY_RGB);
-  doc.roundedRect(MARGIN, y, CW, objH, 0, 2, "FD");
+  // Pre-calcula linhas para altura exata
+  doc.setFontSize(8.5);
+  const objWrapped = plan.objetivos.map(o =>
+    doc.splitTextToSize(`+  ${clean(o)}`, CW-16)
+  );
+  const objH = objWrapped.reduce((a,l) => a + l.length*LH, 0) + PAD_V*2 + 2;
+
+  roundRect(doc, MARGIN, y, CW, objH, 0, WHITE, MGRAY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(...TEXT_RGB);
-  plan.objetivos.forEach((obj, i) => {
-    doc.text(`+  ${clean(obj)}`, MARGIN + 8, y + 5 + i * 6.5);
+  doc.setTextColor(...DARK);
+
+  let oy = y + PAD_V + LH;
+  objWrapped.forEach(lines => {
+    doc.text(lines, MARGIN+8, oy);
+    oy += lines.length * LH + 1;
   });
   y += objH + 5;
 
-  // ── Blocos de exercício ────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 3. BLOCOS
+  // ═══════════════════════════════════════════════════════════════════════════
   plan.blocos.forEach((bloco) => {
-    const LINE_H = 7;
 
-    // Calcular altura real de cada linha (pode quebrar em múltiplas linhas)
-    const cleanedLinhas = bloco.linhas.map(([label, texto]) => ({
-      label: clean(label),
-      texto: clean(texto),
-      hl:    isHighlight(label),
-    }));
-
-    // Pré-calcular quantas linhas de texto cada item vai ocupar
-    const linhaHeights = cleanedLinhas.map(({ texto }) => {
-      const wrapped = doc.splitTextToSize(texto, CW - 50);
-      return Math.max(1, wrapped.length) * LINE_H;
+    // Pre-processa cada linha do bloco
+    doc.setFontSize(8.5);
+    const linhas = bloco.linhas.map(([lbl, txt]) => {
+      const wrapped = doc.splitTextToSize(clean(txt), BODY_W);
+      return {
+        label:   clean(lbl),
+        wrapped,
+        focus:   isFocus(lbl),
+        rowH:    wrapped.length * LH + PAD_V,
+      };
     });
-    const bodyH  = linhaHeights.reduce((a, b) => a + b, 0) + 8;
-    const totalH = 12 + bodyH;
 
-    if (y + totalH > 282) { doc.addPage(); y = 14; }
+    const bodyH  = linhas.reduce((a,l) => a + l.rowH, 0) + PAD_V;
+    const totalH = 11 + bodyH + BLOCK_GAP;
 
-    // Header do bloco
-    doc.setFillColor(...LGRAY_RGB);
-    doc.setDrawColor(...MGRAY_RGB);
-    doc.roundedRect(MARGIN, y, CW, 12, 2, 2, "FD");
+    // Nova pagina se nao couber
+    if (y + totalH > 283) { doc.addPage(); y = 14; }
 
-    // Badge número
-    doc.setFillColor(...ACCENT_RGB);
-    doc.roundedRect(MARGIN + 4, y + 2, 9, 8, 1.5, 1.5, "F");
+    // ── Header do bloco ───────────────────────────────────────────────────
+    roundRect(doc, MARGIN, y, CW, 11, 2, LGRAY, MGRAY);
+
+    // Badge laranja com numero
+    roundRect(doc, MARGIN+3, y+1.5, 8, 8, 1.5, ACCENT);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...WHITE_RGB);
-    doc.text(clean(bloco.numero), MARGIN + 8.5, y + 7.5, { align: "center" });
+    doc.setTextColor(...WHITE);
+    doc.text(clean(bloco.numero), MARGIN+7, y+7.2, { align:"center" });
 
-    // Título (sem emoji)
+    // Titulo
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(...NAVY_RGB);
-    const titleText = doc.splitTextToSize(clean(bloco.titulo), CW - 50);
-    doc.text(titleText, MARGIN + 17, y + 7.5);
+    doc.setFontSize(9);
+    doc.setTextColor(...NAVY);
+    const titleW = CW - 52;
+    const titleLines = doc.splitTextToSize(clean(bloco.titulo), titleW);
+    doc.text(titleLines, MARGIN+14, y+7.2);
 
-    // Duração
+    // Duracao alinhada a direita
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.setTextColor(...ACCENT_RGB);
-    doc.text(clean(bloco.duracao), MARGIN + CW - 4, y + 7.5, { align: "right" });
+    doc.setTextColor(...ACCENT);
+    doc.text(clean(bloco.duracao), MARGIN+CW-3, y+7.2, { align:"right" });
 
-    doc.setDrawColor(...BLUE_RGB);
+    // Linha azul separadora
+    doc.setDrawColor(...BLUE);
     doc.setLineWidth(0.5);
-    doc.line(MARGIN, y + 12, MARGIN + CW, y + 12);
-    y += 12;
+    doc.line(MARGIN, y+11, MARGIN+CW, y+11);
+    y += 11;
 
-    // Corpo do bloco
-    doc.setFillColor(...WHITE_RGB);
-    doc.setDrawColor(...MGRAY_RGB);
+    // ── Corpo do bloco ────────────────────────────────────────────────────
+    doc.setFillColor(...WHITE);
+    doc.setDrawColor(...MGRAY);
+    doc.setLineWidth(0.3);
     doc.rect(MARGIN, y, CW, bodyH, "FD");
 
-    let lineY = y + 6;
-    cleanedLinhas.forEach(({ label, texto, hl }, i) => {
-      // Label
+    let ly = y + PAD_V + LH - 1;
+    linhas.forEach(({ label, wrapped, focus, rowH }, i) => {
+
+      // Label bold azul
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...BLUE_RGB);
-      doc.text(label, MARGIN + 8, lineY);
-
-      // Texto com wrap
-      doc.setFont("helvetica", hl ? "bold" : "normal");
       doc.setFontSize(8);
-      doc.setTextColor(...(hl ? FOCUS_RGB : TEXT_RGB));
-      const wrapped = doc.splitTextToSize(texto, CW - 50);
-      doc.text(wrapped, MARGIN + 38, lineY);
+      doc.setTextColor(...BLUE);
+      doc.text(label, MARGIN+7, ly);
 
-      lineY += Math.max(1, wrapped.length) * LINE_H;
+      // Texto — laranja se foco, escuro caso contrario
+      doc.setFont("helvetica", focus ? "bold" : "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...(focus ? FOCUS : DARK));
+      doc.text(wrapped, MARGIN+LABEL_W, ly);
 
-      // Separador leve entre linhas (exceto última)
-      if (i < cleanedLinhas.length - 1) {
-        doc.setDrawColor(...MGRAY_RGB);
-        doc.setLineWidth(0.2);
-        doc.line(MARGIN + 6, lineY - 1.5, MARGIN + CW - 6, lineY - 1.5);
+      ly += rowH;
+
+      // Separador fino entre linhas (exceto ultima)
+      if (i < linhas.length-1) {
+        doc.setDrawColor(...MGRAY);
+        doc.setLineWidth(0.15);
+        doc.line(MARGIN+5, ly - PAD_V/2, MARGIN+CW-5, ly - PAD_V/2);
       }
     });
 
-    y += bodyH + 4;
+    y += bodyH + BLOCK_GAP;
   });
 
-  // ── Tabela de Resumo ───────────────────────────────────────────────────────
-  if (y + 60 > 282) { doc.addPage(); y = 14; }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 4. RESUMO
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (y + 55 > 283) { doc.addPage(); y = 14; }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...NAVY_RGB);
-  doc.text("RESUMO DO TREINO", MARGIN, y + 5);
+  doc.setTextColor(...NAVY);
+  doc.text("RESUMO DO TREINO", MARGIN, y+5);
   y += 9;
 
-  // Limpar emojis das linhas do resumo
-  const cleanedResumo = plan.resumo.map(([bloco, desc, dur]) => [
-    clean(bloco), clean(desc), clean(dur)
-  ]);
+  const cleanResumo = plan.resumo.map(([b,d,t]) => [clean(b), clean(d), clean(t)]);
 
   doc.autoTable({
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
     head: [["BLOCO", "CONTEUDO", "DURACAO"]],
-    body: [
-      ...cleanedResumo,
-      ["TOTAL", "", clean(plan.totalDuracao)],
-    ],
+    body: [...cleanResumo, ["TOTAL", "", clean(plan.totalDuracao)]],
     styles: {
-      fontSize: 8,
-      cellPadding: 3,
-      textColor: TEXT_RGB,
-      font: "helvetica",
+      fontSize: 8, cellPadding: 3,
+      textColor: DARK, font: "helvetica", overflow: "linebreak",
     },
     headStyles: {
-      fillColor: NAVY_RGB,
-      textColor: 255,
-      fontStyle: "bold",
-      halign: "center",
+      fillColor: NAVY, textColor: 255,
+      fontStyle: "bold", halign: "center",
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 18 },
-      2: { halign: "center", cellWidth: 26 },
+      0: { halign:"center", cellWidth:18 },
+      2: { halign:"center", cellWidth:26 },
     },
-    alternateRowStyles: { fillColor: LGRAY_RGB },
+    alternateRowStyles: { fillColor: LGRAY },
     didParseCell(d) {
       if (d.row.index === plan.resumo.length) {
-        d.cell.styles.fillColor  = BLUE_RGB;
-        d.cell.styles.textColor  = 255;
-        d.cell.styles.fontStyle  = "bold";
-        d.cell.styles.halign     = "center";
+        d.cell.styles.fillColor = BLUE;
+        d.cell.styles.textColor = 255;
+        d.cell.styles.fontStyle = "bold";
+        d.cell.styles.halign    = "center";
       }
     },
   });
 
-  y = doc.lastAutoTable.finalY + 6;
+  y = doc.lastAutoTable.finalY + 5;
 
-  // ── Dica Tática ────────────────────────────────────────────────────────────
-  const tipText  = clean(plan.dicaTatica);
-  const tipLines = doc.splitTextToSize(tipText, CW - 18);
-  const tipH     = Math.max(26, tipLines.length * 5.5 + 16);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 5. DICA TATICA
+  // ═══════════════════════════════════════════════════════════════════════════
+  doc.setFontSize(8.5);
+  const tipText    = clean(plan.dicaTatica);
+  const tipWrapped = doc.splitTextToSize(tipText, CW - 22);
+  const tipH       = tipWrapped.length * LH + 20;
 
-  if (y + tipH > 282) { doc.addPage(); y = 14; }
+  if (y + tipH > 283) { doc.addPage(); y = 14; }
 
-  doc.setFillColor(...TIP_RGB);
-  doc.setDrawColor(...ACCENT_RGB);
-  doc.setLineWidth(0.7);
+  // Fundo + borda laranja
+  doc.setFillColor(...TIP_BG);
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.5);
   doc.roundedRect(MARGIN, y, CW, tipH, 2, 2, "FD");
-  doc.setLineWidth(2.5);
-  doc.setDrawColor(...ACCENT_RGB);
-  doc.line(MARGIN + 0.3, y, MARGIN + 0.3, y + tipH);
 
+  // Barra esquerda laranja solida
+  doc.setFillColor(...ACCENT);
+  doc.rect(MARGIN, y, 2.5, tipH, "F");
+
+  // Titulo
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...ACCENT_RGB);
-  doc.text("DICA TATICA DO DIA", MARGIN + 8, y + 7);
+  doc.setTextColor(...ACCENT);
+  doc.text("DICA TATICA DO DIA", MARGIN+8, y+7);
 
+  // Texto
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...TEXT_RGB);
-  doc.text(tipLines, MARGIN + 8, y + 14);
-  y += tipH + 4;
+  doc.setFontSize(8.5);
+  doc.setTextColor(...DARK);
+  doc.text(tipWrapped, MARGIN+8, y+14);
 
-  // ── Rodapé ─────────────────────────────────────────────────────────────────
-  doc.setDrawColor(...MGRAY_RGB);
+  y += tipH + 5;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6. RODAPE
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (y + 8 > 290) { doc.addPage(); y = 280; }
+
+  doc.setDrawColor(...MGRAY);
   doc.setLineWidth(0.4);
-  doc.line(MARGIN, y, MARGIN + CW, y);
+  doc.line(MARGIN, y, MARGIN+CW, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
-  doc.setTextColor(160, 160, 160);
+  doc.setTextColor(...GRAY_FT);
   doc.text(
-    "Julio Takeichi  |  Planejamento de Treinos - Handebol Universitario - Rio de Janeiro",
-    W / 2, y + 5, { align: "center" }
+    "Julio Takeichi  \xb7  Planejamento de Treinos - Handebol Universitario - Rio de Janeiro",
+    W/2, y+5, { align:"center" }
   );
 
-  // ── Salvar ─────────────────────────────────────────────────────────────────
+  // ── Salvar ──────────────────────────────────────────────────────────────
   const filename = (plan.nomeArquivo || "treino_handebol")
     .replace(/\s+/g, "_")
     .replace(/[^a-zA-Z0-9_\-]/g, "");
