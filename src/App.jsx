@@ -142,7 +142,7 @@ export default function App() {
               HANDBALL PLANNER
             </div>
             <div style={{ fontSize: 10, color: C.accent, letterSpacing: .5 }}>
-              Julio Takeichi · Handebol Universitario · Rio de Janeiro
+              Júlio Murashima · Handebol Universitário · Rio de Janeiro
             </div>
           </div>
         </div>

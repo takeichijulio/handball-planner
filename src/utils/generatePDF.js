@@ -309,7 +309,7 @@ export function generatePDF(plan) {
   doc.setFontSize(7);
   doc.setTextColor(...GRAY_FT);
   doc.text(
-    "Julio Takeichi  \xb7  Planejamento de Treinos - Handebol Universitario - Rio de Janeiro",
+    "Júlio Murashima  \xb7  Planejamento de Treinos - Handebol Universitário - Rio de Janeiro",
     W / 2, y + 5, { align: "center" }
   );
 
